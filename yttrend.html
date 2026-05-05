@@ -67,6 +67,12 @@
   .export-btn { padding: 7px 16px; font-size: 13px; border: 1px solid var(--teal-mid); border-radius: var(--r); background: transparent; color: var(--teal-dark); cursor: pointer; font-weight: 500; transition: all 0.12s; }
   .export-btn:hover { background: var(--teal-light); }
   .export-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .slides-btn { padding: 7px 16px; font-size: 13px; border: 1px solid #7F77DD; border-radius: var(--r); background: transparent; color: #3C3489; cursor: pointer; font-weight: 500; transition: all 0.12s; }
+  .slides-btn:hover { background: #EEEDFE; }
+  .slides-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .export-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .slides-count { width: 54px; padding: 6px 8px; font-size: 13px; border: 1px solid var(--border2); border-radius: var(--r); background: var(--bg2); color: var(--text); text-align: center; outline: none; }
+  .slides-count:focus { border-color: #7F77DD; }
 
   .tab-row { display: flex; gap: 0; margin-bottom: 14px; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
   .tab-btn { flex: 1; padding: 9px; font-size: 13px; font-weight: 600; border: none; background: var(--bg2); color: var(--text2); cursor: pointer; transition: all 0.15s; }
@@ -190,7 +196,11 @@
     <div class="divider"></div>
     <div class="results-bar">
       <span class="results-count" id="rc"></span>
-      <button class="export-btn" id="xb" onclick="exportToSheets()">구글 시트로 저장</button>
+      <div class="export-group">
+        <button class="export-btn" id="xb" onclick="exportToSheets()">시트로 저장</button>
+        <input class="slides-count" type="number" id="slideCount" value="10" min="1" max="50" title="슬라이드 개수"/>
+        <button class="slides-btn" id="pb" onclick="exportToSlides()">📊 프레젠테이션</button>
+      </div>
     </div>
     <div class="sort-row" id="sr"></div>
     <div class="video-list" id="vl"></div>
@@ -207,7 +217,7 @@
 <script>
 const YK='AIzaSyBHYPW77kc0m5ylTLHeAA5HYPtcrw4PstA';
 const CID='479872973466-becf7hg6u1mj0goppfib3dspjpit2t1b.apps.googleusercontent.com';
-const SC='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const SC='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/presentations';
 
 const PRESETS=[
   {l:'허리디스크',g:'정형외과'},{l:'무릎통증',g:'정형외과'},{l:'어깨통증',g:'정형외과'},
@@ -403,6 +413,155 @@ function render(){
 }
 
 function ss(k){ csort=k; render(); }
+
+async function exportToSlides(){
+  if(!token){alert('먼저 구글 계정에 로그인해 주세요.');return;}
+  if(!vids.length){alert('먼저 영상을 검색해 주세요.');return;}
+
+  const pb=document.getElementById('pb');
+  pb.disabled=true; pb.textContent='생성 중...';
+
+  let sorted=[...vids];
+  if(csort==='views') sorted.sort((a,b)=>b.views-a.views);
+  else if(csort==='eng') sorted.sort((a,b)=>b.eng-a.eng);
+  else if(csort==='vpd') sorted.sort((a,b)=>b.vpd-a.vpd);
+  else if(csort==='likes') sorted.sort((a,b)=>b.likes-a.likes);
+  else sorted.sort((a,b)=>b.algo-a.algo);
+
+  const n=Math.min(parseInt(document.getElementById('slideCount').value)||10, sorted.length);
+  const target=sorted.slice(0,n);
+  const tabLabel=curTab==='short'?'쇼츠':'롱폼';
+  const today=new Date().toLocaleDateString('ko-KR');
+  const W=9144000, H=5143500;
+
+  try{
+    const cr=await fetch('https://slides.googleapis.com/v1/presentations',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+      body:JSON.stringify({title:`정형외과 유튜브 트렌드 ${tabLabel} TOP${n} · ${today}`})
+    });
+    const pres=await cr.json();
+    const pid=pres.presentationId;
+    const firstSlideId=pres.slides[0].objectId;
+
+    const requests=[];
+    requests.push({deleteObject:{objectId:firstSlideId}});
+
+    // 표지
+    const coverId='slide_cover';
+    requests.push({createSlide:{objectId:coverId,insertionIndex:0,slideLayoutReference:{predefinedLayout:'BLANK'}}});
+    requests.push({updateSlideProperties:{objectId:coverId,slideProperties:{pageBackgroundFill:{solidFill:{color:{rgbColor:{red:0.055,green:0.314,blue:0.259}}}}},fields:'pageBackgroundFill'}});
+    const ctId='cover_title';
+    requests.push({createShape:{objectId:ctId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:coverId,size:{width:{magnitude:W*0.8,unit:'EMU'},height:{magnitude:H*0.3,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.1,translateY:H*0.25,unit:'EMU'}}}});
+    requests.push({insertText:{objectId:ctId,text:`정형외과 유튜브 트렌드\n${tabLabel} TOP ${n}`}});
+    requests.push({updateTextStyle:{objectId:ctId,textRange:{type:'ALL'},style:{foregroundColor:{opaqueColor:{rgbColor:{red:1,green:1,blue:1}}},fontSize:{magnitude:36,unit:'PT'},bold:true,fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,bold,fontFamily'}});
+    requests.push({updateParagraphStyle:{objectId:ctId,textRange:{type:'ALL'},style:{alignment:'CENTER'},fields:'alignment'}});
+    const csId='cover_sub';
+    requests.push({createShape:{objectId:csId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:coverId,size:{width:{magnitude:W*0.8,unit:'EMU'},height:{magnitude:H*0.1,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.1,translateY:H*0.6,unit:'EMU'}}}});
+    requests.push({insertText:{objectId:csId,text:`${today} 기준 · 알고리즘 점수 기반 분석`}});
+    requests.push({updateTextStyle:{objectId:csId,textRange:{type:'ALL'},style:{foregroundColor:{opaqueColor:{rgbColor:{red:0.6,green:0.9,blue:0.8}}},fontSize:{magnitude:16,unit:'PT'},fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,fontFamily'}});
+    requests.push({updateParagraphStyle:{objectId:csId,textRange:{type:'ALL'},style:{alignment:'CENTER'},fields:'alignment'}});
+
+    // 영상 슬라이드
+    target.forEach((v,i)=>{
+      const rank=i+1;
+      const sid=`slide_${i}`;
+      const engLabel=v.eng>=5?'참여율 높음 ★':v.eng>=2?'참여율 보통':'참여율 낮음';
+
+      requests.push({createSlide:{objectId:sid,insertionIndex:i+1,slideLayoutReference:{predefinedLayout:'BLANK'}}});
+      requests.push({updateSlideProperties:{objectId:sid,slideProperties:{pageBackgroundFill:{solidFill:{color:{rgbColor:{red:0.98,green:0.98,blue:0.97}}}}},fields:'pageBackgroundFill'}});
+
+      // 헤더 바
+      const hId=`hd_${i}`;
+      requests.push({createShape:{objectId:hId,shapeType:'RECTANGLE',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W,unit:'EMU'},height:{magnitude:H*0.13,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:0,translateY:0,unit:'EMU'}}}});
+      requests.push({updateShapeProperties:{objectId:hId,shapeProperties:{shapeBackgroundFill:{solidFill:{color:{rgbColor:{red:0.114,green:0.620,blue:0.459}}}},outline:{outlineFill:{solidFill:{color:{rgbColor:{red:0.114,green:0.620,blue:0.459}}}}}},fields:'shapeBackgroundFill,outline'}});
+
+      // 순위
+      const rkId=`rk_${i}`;
+      requests.push({createShape:{objectId:rkId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.15,unit:'EMU'},height:{magnitude:H*0.13,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.02,translateY:0,unit:'EMU'}}}});
+      requests.push({insertText:{objectId:rkId,text:`#${rank}`}});
+      requests.push({updateTextStyle:{objectId:rkId,textRange:{type:'ALL'},style:{foregroundColor:{opaqueColor:{rgbColor:{red:1,green:1,blue:1}}},fontSize:{magnitude:28,unit:'PT'},bold:true,fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,bold,fontFamily'}});
+      requests.push({updateParagraphStyle:{objectId:rkId,textRange:{type:'ALL'},style:{alignment:'LEFT',spaceAbove:{magnitude:8,unit:'PT'}},fields:'alignment,spaceAbove'}});
+
+      // 키워드
+      const kwId=`kw_${i}`;
+      requests.push({createShape:{objectId:kwId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.55,unit:'EMU'},height:{magnitude:H*0.13,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.18,translateY:0,unit:'EMU'}}}});
+      requests.push({insertText:{objectId:kwId,text:`${tabLabel} · ${v.kw}`}});
+      requests.push({updateTextStyle:{objectId:kwId,textRange:{type:'ALL'},style:{foregroundColor:{opaqueColor:{rgbColor:{red:0.8,green:0.96,blue:0.9}}},fontSize:{magnitude:14,unit:'PT'},fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,fontFamily'}});
+      requests.push({updateParagraphStyle:{objectId:kwId,textRange:{type:'ALL'},style:{alignment:'LEFT',spaceAbove:{magnitude:18,unit:'PT'}},fields:'alignment,spaceAbove'}});
+
+      // 썸네일
+      if(v.thumb){
+        requests.push({createImage:{objectId:`img_${i}`,url:v.thumb,elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.38,unit:'EMU'},height:{magnitude:H*0.43,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.04,translateY:H*0.17,unit:'EMU'}}}});
+      }
+
+      // 제목
+      const tiId=`ti_${i}`;
+      requests.push({createShape:{objectId:tiId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.54,unit:'EMU'},height:{magnitude:H*0.22,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.44,translateY:H*0.16,unit:'EMU'}}}});
+      requests.push({insertText:{objectId:tiId,text:v.title}});
+      requests.push({updateTextStyle:{objectId:tiId,textRange:{type:'ALL'},style:{foregroundColor:{opaqueColor:{rgbColor:{red:0.1,green:0.1,blue:0.1}}},fontSize:{magnitude:17,unit:'PT'},bold:true,fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,bold,fontFamily'}});
+
+      // 채널 + 날짜
+      const chId=`ch_${i}`;
+      requests.push({createShape:{objectId:chId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.54,unit:'EMU'},height:{magnitude:H*0.09,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.44,translateY:H*0.38,unit:'EMU'}}}});
+      requests.push({insertText:{objectId:chId,text:`${v.ch}  ·  업로드 ${fmtD(v.pub)}`}});
+      requests.push({updateTextStyle:{objectId:chId,textRange:{type:'ALL'},style:{foregroundColor:{opaqueColor:{rgbColor:{red:0.45,green:0.45,blue:0.45}}},fontSize:{magnitude:13,unit:'PT'},fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,fontFamily'}});
+
+      // 구분선
+      const lnId=`ln_${i}`;
+      requests.push({createLine:{objectId:lnId,lineCategory:'STRAIGHT',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.9,unit:'EMU'},height:{magnitude:1,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.05,translateY:H*0.63,unit:'EMU'}}}});
+      requests.push({updateLineProperties:{objectId:lnId,lineProperties:{lineFill:{solidFill:{color:{rgbColor:{red:0.85,green:0.85,blue:0.85}}}},weight:{magnitude:1,unit:'PT'}},fields:'lineFill,weight'}});
+
+      // 통계 박스 4개
+      const stats=[
+        {label:'⚡ 알고리즘 점수', val:v.algo.toLocaleString(), accent:true},
+        {label:'조회수', val:fmt(v.views), accent:false},
+        {label:'일평균 조회수', val:fmt(v.vpd), accent:false},
+        {label:'참여율', val:v.eng.toFixed(1)+'%  '+engLabel, accent:false},
+      ];
+      stats.forEach((st,si)=>{
+        const bx=si*(W*0.225);
+        const boxId=`sb_${i}_${si}`;
+        const txtId=`st_${i}_${si}`;
+        const bgRgb=st.accent?{red:0.933,green:0.929,blue:0.996}:{red:0.94,green:0.97,blue:0.95};
+        const valRgb=st.accent?{red:0.22,green:0.18,blue:0.54}:{red:0.055,green:0.314,blue:0.259};
+        requests.push({createShape:{objectId:boxId,shapeType:'ROUND_RECTANGLE',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.205,unit:'EMU'},height:{magnitude:H*0.2,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.05+bx,translateY:H*0.68,unit:'EMU'}}}});
+        requests.push({updateShapeProperties:{objectId:boxId,shapeProperties:{shapeBackgroundFill:{solidFill:{color:{rgbColor:bgRgb}}},outline:{outlineFill:{solidFill:{color:{rgbColor:{red:0.88,green:0.88,blue:0.88}}}}}},fields:'shapeBackgroundFill,outline'}});
+        requests.push({createShape:{objectId:txtId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.205,unit:'EMU'},height:{magnitude:H*0.2,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.05+bx,translateY:H*0.68,unit:'EMU'}}}});
+        const fullTxt=st.label+'\n'+st.val;
+        requests.push({insertText:{objectId:txtId,text:fullTxt}});
+        requests.push({updateTextStyle:{objectId:txtId,textRange:{type:'FIXED_RANGE',startIndex:0,endIndex:st.label.length},style:{foregroundColor:{opaqueColor:{rgbColor:{red:0.4,green:0.4,blue:0.4}}},fontSize:{magnitude:10,unit:'PT'},fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,fontFamily'}});
+        requests.push({updateTextStyle:{objectId:txtId,textRange:{type:'FIXED_RANGE',startIndex:st.label.length+1,endIndex:fullTxt.length},style:{foregroundColor:{opaqueColor:{rgbColor:valRgb}},fontSize:{magnitude:15,unit:'PT'},bold:true,fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,bold,fontFamily'}});
+        requests.push({updateParagraphStyle:{objectId:txtId,textRange:{type:'ALL'},style:{alignment:'CENTER',spaceAbove:{magnitude:8,unit:'PT'}},fields:'alignment,spaceAbove'}});
+      });
+
+      // URL
+      const urlId=`ul_${i}`;
+      requests.push({createShape:{objectId:urlId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.9,unit:'EMU'},height:{magnitude:H*0.06,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.05,translateY:H*0.92,unit:'EMU'}}}});
+      requests.push({insertText:{objectId:urlId,text:`https://www.youtube.com/watch?v=${v.id}`}});
+      requests.push({updateTextStyle:{objectId:urlId,textRange:{type:'ALL'},style:{foregroundColor:{opaqueColor:{rgbColor:{red:0.1,green:0.45,blue:0.8}}},fontSize:{magnitude:11,unit:'PT'},fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,fontFamily'}});
+    });
+
+    // 100개씩 나눠서 전송
+    const CHUNK=100;
+    for(let i=0;i<requests.length;i+=CHUNK){
+      const res=await fetch(`https://slides.googleapis.com/v1/presentations/${pid}:batchUpdate`,{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+        body:JSON.stringify({requests:requests.slice(i,i+CHUNK)})
+      });
+      const rd=await res.json();
+      if(rd.error) throw new Error(rd.error.message);
+    }
+
+    window.open(`https://docs.google.com/presentation/d/${pid}/edit`,'_blank');
+    pb.textContent='생성 완료!';
+    setTimeout(()=>{pb.textContent='📊 프레젠테이션';pb.disabled=false;},3000);
+  }catch(e){
+    alert('슬라이드 생성 오류: '+e.message);
+    pb.textContent='📊 프레젠테이션'; pb.disabled=false;
+  }
+}
 
 async function exportToSheets(){
   if(!token){alert('먼저 구글 계정에 로그인해 주세요.');return;}
