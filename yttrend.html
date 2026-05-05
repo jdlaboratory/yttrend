@@ -137,8 +137,8 @@
   </div>
 
   <div class="tab-row">
-    <button class="tab-btn on" id="tabLong" onclick="setTab('long')">롱폼 <span class="tab-label tab-label-l">15분+</span></button>
-    <button class="tab-btn" id="tabShort" onclick="setTab('short')">쇼츠 <span class="tab-label tab-label-s">60초↓</span></button>
+    <button class="tab-btn on" id="tabLong" onclick="setTab('long')">일반 영상 <span class="tab-label tab-label-l">4분+</span></button>
+    <button class="tab-btn" id="tabShort" onclick="setTab('short')">쇼츠 <span class="tab-label tab-label-s">4분↓</span></button>
   </div>
 
   <div class="card">
@@ -369,7 +369,7 @@ function render(){
 
   document.getElementById('stbox').style.display='none';
   document.getElementById('rw').style.display='block';
-  const tabLabel=curTab==='short'?'쇼츠':'롱폼';
+  const tabLabel=curTab==='short'?'쇼츠':'일반 영상';
   document.getElementById('rc').textContent=`${tabLabel} ${s.length}개`;
 
   const sdefs=[
@@ -430,7 +430,7 @@ async function exportToSlides(){
 
   const n=Math.min(parseInt(document.getElementById('slideCount').value)||10, sorted.length);
   const target=sorted.slice(0,n);
-  const tabLabel=curTab==='short'?'쇼츠':'롱폼';
+  const tabLabel=curTab==='short'?'쇼츠':'일반 영상';
   const today=new Date().toLocaleDateString('ko-KR');
   const W=9144000, H=5143500;
 
@@ -587,7 +587,7 @@ async function exportToSheets(){
       body:JSON.stringify({requests:[{addSheet:{properties:{title:st}}}]})
     });
     const hd=[['순위','유형','제목','채널','키워드','알고리즘점수','조회수','좋아요','댓글','참여율(%)','일평균조회수','업로드일','URL']];
-    const rows=vids.map((v,i)=>[i+1,curTab==='short'?'쇼츠':'롱폼',v.title,v.ch,v.kw,v.algo,v.views,v.likes,v.comments,v.eng,v.vpd,fmtD(v.pub),`https://www.youtube.com/watch?v=${v.id}`]);
+    const rows=vids.map((v,i)=>[i+1,curTab==='short'?'쇼츠':'일반 영상',v.title,v.ch,v.kw,v.algo,v.views,v.likes,v.comments,v.eng,v.vpd,fmtD(v.pub),`https://www.youtube.com/watch?v=${v.id}`]);
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${encodeURIComponent(st)}!A1:append?valueInputOption=USER_ENTERED`,{
       method:'POST',
       headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
