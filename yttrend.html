@@ -215,8 +215,8 @@
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
-const YK='AIzaSyBHYPW77kc0m5ylTLHeAA5HYPtcrw4PstA';
-const CID='479872973466-becf7hg6u1mj0goppfib3dspjpit2t1b.apps.googleusercontent.com';
+const YK='AIzaSyBI5TRn_Kx_33hgYS_Buo3QtCNIfLEoxDs';
+const CID='1072606718867-1setoprigl5mla4hau0h5dustdbbksdp.apps.googleusercontent.com';
 const SC='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/presentations';
 
 const PRESETS=[
@@ -605,37 +605,55 @@ async function exportToSheets(){
   if(!vids.length){alert('저장할 결과가 없어요.');return;}
   const xb=document.getElementById('xb');
   xb.disabled=true; xb.textContent='저장 중...';
+
+  const hd=['순위','유형','제목','채널','키워드','알고리즘점수','조회수','좋아요','댓글','참여율(%)','일평균조회수','업로드일','URL'];
+  const rows=vids.map((v,i)=>[i+1,curTab==='short'?'쇼츠':'일반 영상',v.title,v.ch,v.kw,v.algo,v.views,v.likes,v.comments,v.eng,v.vpd,fmtD(v.pub),`https://www.youtube.com/watch?v=${v.id}`]);
+  const values=[hd,...rows];
+  const st='트렌드_'+new Date().toLocaleDateString('ko-KR').replace(/\./g,'').replace(/ /g,'');
+  const H={'Authorization':'Bearer '+token,'Content-Type':'application/json'};
+
   try{
-    let sid;
     const uv=document.getElementById('su').value.trim();
     const m=uv.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-    if(m){sid=m[1];}else{
-      const cr=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{
-        method:'POST',
-        headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-        body:JSON.stringify({properties:{title:'유튜브 트렌드 분석 '+new Date().toLocaleDateString('ko-KR')}})
+    let url;
+
+    if(m){
+      // 기존 시트: addSheet + values.update 2호출로 처리
+      const sid=m[1];
+      const ar=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`,{
+        method:'POST',headers:H,
+        body:JSON.stringify({requests:[{addSheet:{properties:{title:st,gridProperties:{rowCount:rows.length+10,columnCount:hd.length}}}}]})
       });
-      const cd=await cr.json(); sid=cd.spreadsheetId;
+      const ad=await ar.json();
+      if(ad.error) throw new Error(ad.error.message);
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${encodeURIComponent(st)}!A1?valueInputOption=USER_ENTERED`,{
+        method:'PUT',headers:H,body:JSON.stringify({values})
+      });
+      url=`https://docs.google.com/spreadsheets/d/${sid}`;
+    }else{
+      // 새 시트: 생성 시 시트명·데이터를 한 번에 포함 (1호출)
+      const toCell=cell=>typeof cell==='number'?{numberValue:cell}:{stringValue:String(cell==null?'':cell)};
+      const cr=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{
+        method:'POST',headers:H,
+        body:JSON.stringify({
+          properties:{title:'유튜브 트렌드 분석 '+new Date().toLocaleDateString('ko-KR')},
+          sheets:[{
+            properties:{title:st,gridProperties:{rowCount:rows.length+10,columnCount:hd.length}},
+            data:[{startRow:0,startColumn:0,rowData:values.map(row=>({values:row.map(cell=>({userEnteredValue:toCell(cell)}))}))}]
+          }]
+        })
+      });
+      const cd=await cr.json();
+      if(cd.error) throw new Error(cd.error.message);
+      url=`https://docs.google.com/spreadsheets/d/${cd.spreadsheetId}`;
     }
-    const st='트렌드_'+new Date().toLocaleDateString('ko-KR').replace(/\./g,'').replace(/ /g,'');
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`,{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-      body:JSON.stringify({requests:[{addSheet:{properties:{title:st}}}]})
-    });
-    const hd=[['순위','유형','제목','채널','키워드','알고리즘점수','조회수','좋아요','댓글','참여율(%)','일평균조회수','업로드일','URL']];
-    const rows=vids.map((v,i)=>[i+1,curTab==='short'?'쇼츠':'일반 영상',v.title,v.ch,v.kw,v.algo,v.views,v.likes,v.comments,v.eng,v.vpd,fmtD(v.pub),`https://www.youtube.com/watch?v=${v.id}`]);
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${encodeURIComponent(st)}!A1:append?valueInputOption=USER_ENTERED`,{
-      method:'POST',
-      headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
-      body:JSON.stringify({values:[...hd,...rows]})
-    });
-    window.open(`https://docs.google.com/spreadsheets/d/${sid}`,'_blank');
+
+    window.open(url,'_blank');
     xb.textContent='저장 완료!';
-    setTimeout(()=>{xb.textContent='구글 시트로 저장';xb.disabled=false;},2500);
+    setTimeout(()=>{xb.textContent='시트로 저장';xb.disabled=false;},2500);
   }catch(e){
     alert('저장 오류: '+e.message);
-    xb.textContent='구글 시트로 저장'; xb.disabled=false;
+    xb.textContent='시트로 저장'; xb.disabled=false;
   }
 }
 
