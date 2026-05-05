@@ -297,6 +297,10 @@ function fmtD(s){
 }
 function dys(s){ return Math.floor((Date.now()-new Date(s))/86400000); }
 
+const searchCache=new Map();
+
+function cacheKey(kws,period,so,tab){return kws.slice().sort().join('|')+'::'+period+'::'+so+'::'+tab;}
+
 async function doSearch(){
   const kws=[...sel];
   if(!kws.length){alert('키워드를 하나 이상 선택해 주세요.');return;}
@@ -313,23 +317,52 @@ async function doSearch(){
   const after=getPd(period);
   const durParams=curTab==='short'?['&videoDuration=short']:['&videoDuration=medium','&videoDuration=long'];
 
+  // 캐시 확인
+  const ck=cacheKey(kws,period,so,curTab);
+  if(searchCache.has(ck)){
+    const cached=searchCache.get(ck);
+    vids=cached.filter(v=>v.views>=mv);
+    if(vids.length){render();btn.disabled=false;btn.textContent='영상 검색하기';
+      document.getElementById('stbox').style.display='none';
+      return;}
+  }
+
   try{
     const vm={};
-    for(const kw of kws){
-      for(const dur of durParams){
-        const r=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(kw)}&type=video&regionCode=KR&relevanceLanguage=ko&order=${so}&publishedAfter=${after}&maxResults=10${dur}&key=${YK}`);
-        const d=await r.json();
-        if(!d.items) continue;
-        d.items.forEach(it=>{const id=it.id.videoId;if(!vm[id])vm[id]={id,sn:it.snippet,kw};});
-      }
+    // 키워드를 OR로 묶어 search 호출 횟수를 duration당 1회로 절감
+    // search.list=100유닛, videos.list=1유닛
+    const kwQuery=kws.map(k=>encodeURIComponent(k)).join('%7C'); // | 로 OR 연결
+    for(const dur of durParams){
+      const r=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${kwQuery}&type=video&regionCode=KR&relevanceLanguage=ko&order=${so}&publishedAfter=${after}&maxResults=25${dur}&key=${YK}`);
+      const d=await r.json();
+      if(d.error) throw new Error(d.error.message);
+      if(!d.items) continue;
+      d.items.forEach(it=>{
+        const id=it.id.videoId;
+        if(!vm[id]){
+          // 매칭된 키워드 추정 (제목/설명에서)
+          const title=(it.snippet.title+' '+it.snippet.description).toLowerCase();
+          const matched=kws.find(k=>title.includes(k.toLowerCase()))||kws[0];
+          vm[id]={id,sn:it.snippet,kw:matched};
+        }
+      });
     }
+
     const ids=Object.keys(vm);
     if(!ids.length) throw new Error('검색 결과가 없어요. 기간이나 키워드를 조정해 보세요.');
 
-    const sr2=await fetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${ids.join(',')}&key=${YK}`);
-    const sd=await sr2.json();
+    // videos.list는 50개까지 한 번에 처리 가능 (1유닛)
+    const allStats=[];
+    for(let i=0;i<ids.length;i+=50){
+      const chunk=ids.slice(i,i+50);
+      const sr=await fetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${chunk.join(',')}&key=${YK}`);
+      const sd=await sr.json();
+      if(sd.error) throw new Error(sd.error.message);
+      if(sd.items) allStats.push(...sd.items);
+    }
 
-    sd.items.forEach(it=>{
+    const rawVids=[];
+    allStats.forEach(it=>{
       const b=vm[it.id]; if(!b) return;
       const views=parseInt(it.statistics.viewCount||0);
       const likes=parseInt(it.statistics.likeCount||0);
@@ -337,18 +370,22 @@ async function doSearch(){
       const eng=views>0?parseFloat(((likes+comments)/views*100).toFixed(2)):0;
       const d2=dys(b.sn.publishedAt);
       const vpd=d2>0?Math.round(views/d2):views;
-      if(views<mv) return;
-
       const likeRate=views>0?(likes/views*100):0;
       const cmtRate=views>0?(comments/views*100):0;
       const earlyBonus=d2<=7?1.3:d2<=30?1.1:1.0;
       const algoRaw=(vpd*0.4)+(likeRate*3000*0.3)+(cmtRate*5000*0.2)+(vpd*0.1*(earlyBonus-1)*10);
       const algo=Math.round(algoRaw);
-
-      vids.push({id:it.id,title:b.sn.title,ch:b.sn.channelTitle,
+      rawVids.push({id:it.id,title:b.sn.title,ch:b.sn.channelTitle,
         thumb:b.sn.thumbnails?.medium?.url||'',pub:b.sn.publishedAt,
         views,likes,comments,eng,vpd,kw:b.kw,algo,d2});
     });
+
+    // 세션 캐시 저장 (조회수 필터 전 원본 저장)
+    searchCache.set(ck,rawVids);
+    vids=rawVids.filter(v=>v.views>=mv);
+
+    const used=durParams.length*100+Math.ceil(ids.length/50);
+    console.log(`API 유닛 소모: 약 ${used}유닛 (search×${durParams.length} + videos×${Math.ceil(ids.length/50)})`);
 
     if(!vids.length) throw new Error('조건에 맞는 영상이 없어요. 최소 조회수를 낮춰 보세요.');
     render();
