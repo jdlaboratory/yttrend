@@ -301,15 +301,17 @@ async function doSearch(){
   const so=document.getElementById('fs').value;
   const mv=parseInt(document.getElementById('fm').value);
   const after=getPd(period);
-  const durParam=curTab==='short'?'&videoDuration=short':'&videoDuration=medium,long';
+  const durParams=curTab==='short'?['&videoDuration=short']:['&videoDuration=medium','&videoDuration=long'];
 
   try{
     const vm={};
     for(const kw of kws){
-      const r=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(kw)}&type=video&regionCode=KR&relevanceLanguage=ko&order=${so}&publishedAfter=${after}&maxResults=15${durParam}&key=${YK}`);
-      const d=await r.json();
-      if(!d.items) continue;
-      d.items.forEach(it=>{const id=it.id.videoId;if(!vm[id])vm[id]={id,sn:it.snippet,kw};});
+      for(const dur of durParams){
+        const r=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(kw)}&type=video&regionCode=KR&relevanceLanguage=ko&order=${so}&publishedAfter=${after}&maxResults=10${dur}&key=${YK}`);
+        const d=await r.json();
+        if(!d.items) continue;
+        d.items.forEach(it=>{const id=it.id.videoId;if(!vm[id])vm[id]={id,sn:it.snippet,kw};});
+      }
     }
     const ids=Object.keys(vm);
     if(!ids.length) throw new Error('검색 결과가 없어요. 기간이나 키워드를 조정해 보세요.');
