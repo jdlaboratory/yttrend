@@ -450,7 +450,7 @@ async function exportToSlides(){
     // 표지
     const coverId='slide_cover';
     requests.push({createSlide:{objectId:coverId,insertionIndex:0,slideLayoutReference:{predefinedLayout:'BLANK'}}});
-    requests.push({updateSlideProperties:{objectId:coverId,slideProperties:{pageBackgroundFill:{solidFill:{color:{rgbColor:{red:0.055,green:0.314,blue:0.259}}}}},fields:'pageBackgroundFill'}});
+    requests.push({updatePageProperties:{objectId:coverId,pageProperties:{pageBackgroundFill:{solidFill:{color:{rgbColor:{red:0.055,green:0.314,blue:0.259}}}}},fields:'pageBackgroundFill'}});
     const ctId='cover_title';
     requests.push({createShape:{objectId:ctId,shapeType:'TEXT_BOX',elementProperties:{pageObjectId:coverId,size:{width:{magnitude:W*0.8,unit:'EMU'},height:{magnitude:H*0.3,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.1,translateY:H*0.25,unit:'EMU'}}}});
     requests.push({insertText:{objectId:ctId,text:`정형외과 유튜브 트렌드\n${tabLabel} TOP ${n}`}});
@@ -469,7 +469,7 @@ async function exportToSlides(){
       const engLabel=v.eng>=5?'참여율 높음 ★':v.eng>=2?'참여율 보통':'참여율 낮음';
 
       requests.push({createSlide:{objectId:sid,insertionIndex:i+1,slideLayoutReference:{predefinedLayout:'BLANK'}}});
-      requests.push({updateSlideProperties:{objectId:sid,slideProperties:{pageBackgroundFill:{solidFill:{color:{rgbColor:{red:0.98,green:0.98,blue:0.97}}}}},fields:'pageBackgroundFill'}});
+      requests.push({updatePageProperties:{objectId:sid,pageProperties:{pageBackgroundFill:{solidFill:{color:{rgbColor:{red:0.98,green:0.98,blue:0.97}}}}},fields:'pageBackgroundFill'}});
 
       // 헤더 바
       const hId=`hd_${i}`;
@@ -507,10 +507,10 @@ async function exportToSlides(){
       requests.push({insertText:{objectId:chId,text:`${v.ch}  ·  업로드 ${fmtD(v.pub)}`}});
       requests.push({updateTextStyle:{objectId:chId,textRange:{type:'ALL'},style:{foregroundColor:{opaqueColor:{rgbColor:{red:0.45,green:0.45,blue:0.45}}},fontSize:{magnitude:13,unit:'PT'},fontFamily:'Noto Sans KR'},fields:'foregroundColor,fontSize,fontFamily'}});
 
-      // 구분선
+      // 구분선 (얇은 사각형으로 대체)
       const lnId=`ln_${i}`;
-      requests.push({createLine:{objectId:lnId,lineCategory:'STRAIGHT',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.9,unit:'EMU'},height:{magnitude:1,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.05,translateY:H*0.63,unit:'EMU'}}}});
-      requests.push({updateLineProperties:{objectId:lnId,lineProperties:{lineFill:{solidFill:{color:{rgbColor:{red:0.85,green:0.85,blue:0.85}}}},weight:{magnitude:1,unit:'PT'}},fields:'lineFill,weight'}});
+      requests.push({createShape:{objectId:lnId,shapeType:'RECTANGLE',elementProperties:{pageObjectId:sid,size:{width:{magnitude:W*0.9,unit:'EMU'},height:{magnitude:36000,unit:'EMU'}},transform:{scaleX:1,scaleY:1,translateX:W*0.05,translateY:H*0.63,unit:'EMU'}}}});
+      requests.push({updateShapeProperties:{objectId:lnId,shapeProperties:{shapeBackgroundFill:{solidFill:{color:{rgbColor:{red:0.82,green:0.82,blue:0.82}}}},outline:{outlineFill:{solidFill:{color:{rgbColor:{red:0.82,green:0.82,blue:0.82}}}}}},fields:'shapeBackgroundFill,outline'}});
 
       // 통계 박스 4개
       const stats=[
